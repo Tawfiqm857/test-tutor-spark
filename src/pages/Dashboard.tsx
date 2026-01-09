@@ -6,12 +6,17 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTest } from '@/contexts/TestContext';
-import { Play, Clock, Trophy, Target, BookOpen, Brain, ChevronRight, Sparkles } from 'lucide-react';
+import { useQuizStats } from '@/hooks/useQuizStats';
+import { Play, Clock, Trophy, Target, BookOpen, Brain, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
+import PerformanceChart from '@/components/dashboard/PerformanceChart';
+import SubjectBreakdownChart from '@/components/dashboard/SubjectBreakdownChart';
+import ScoreDistributionChart from '@/components/dashboard/ScoreDistributionChart';
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const { tests, getTestProgress } = useTest();
+  const { performanceData, subjectData, scoreDistribution, totalAttempts, averageScore, loading: statsLoading } = useQuizStats();
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -42,17 +47,7 @@ const Dashboard: React.FC = () => {
     return Math.round((completedTests / tests.length) * 100);
   };
 
-  const getAverageScore = () => {
-    const completedTests = tests.filter(test => getTestProgress(test.id).status === 'completed');
-    if (completedTests.length === 0) return 0;
-    
-    const totalScore = completedTests.reduce((sum, test) => sum + getTestProgress(test.id).bestScore, 0);
-    return Math.round(totalScore / completedTests.length);
-  };
-
   const overallProgress = calculateOverallProgress();
-  const averageScore = getAverageScore();
-  const totalAttempts = tests.reduce((sum, test) => sum + getTestProgress(test.id).attempts, 0);
 
   const stats = [
     { 
@@ -125,12 +120,19 @@ const Dashboard: React.FC = () => {
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground">{stat.label}</p>
-                    <p className="text-xl font-bold">{stat.value}</p>
+                    <p className="text-xl font-bold">{statsLoading ? <Loader2 className="h-5 w-5 animate-spin" /> : stat.value}</p>
                   </div>
                 </div>
               </CardContent>
             </Card>
           ))}
+        </div>
+
+        {/* Charts Section */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          <PerformanceChart data={performanceData} />
+          <SubjectBreakdownChart data={subjectData} />
+          <ScoreDistributionChart data={scoreDistribution} />
         </div>
 
         {/* Progress Overview */}
