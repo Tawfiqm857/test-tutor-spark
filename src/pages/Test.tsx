@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,9 +6,10 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTest } from '@/contexts/TestContext';
 import { useToast } from '@/hooks/use-toast';
-import { Clock, ChevronLeft, ChevronRight, BookOpen, Send, AlertCircle } from 'lucide-react';
+import { Clock, ChevronLeft, ChevronRight, BookOpen, Send, AlertCircle, CheckCircle, XCircle, Lightbulb, Timer } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,6 +21,14 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface AnswerFeedback {
+  questionId: string;
+  isCorrect: boolean;
+  correctAnswer: number;
+  explanation?: string;
+  shown: boolean;
+}
+
 const Test: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
@@ -30,6 +39,8 @@ const Test: React.FC = () => {
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [answerFeedback, setAnswerFeedback] = useState<Record<string, AnswerFeedback>>({});
+  const [showExplanation, setShowExplanation] = useState(false);
 
   useEffect(() => {
     if (testId) {
@@ -45,7 +56,8 @@ const Test: React.FC = () => {
       }
       
       startTest(testId);
-      setTimeRemaining(test.timeLimit * 60); // Convert minutes to seconds
+      setTimeRemaining(test.timeLimit * 60);
+      setAnswerFeedback({});
     }
 
     return () => {
@@ -61,10 +73,21 @@ const Test: React.FC = () => {
 
       return () => clearTimeout(timer);
     } else if (timeRemaining === 0 && currentTest) {
-      // Auto-submit when time runs out
       handleSubmitTest();
     }
   }, [timeRemaining, currentTest]);
+
+  // Reset explanation visibility when changing questions
+  useEffect(() => {
+    if (currentTest) {
+      const questionId = currentTest.questions[currentQuestionIndex]?.id;
+      if (questionId && answerFeedback[questionId]?.shown) {
+        setShowExplanation(true);
+      } else {
+        setShowExplanation(false);
+      }
+    }
+  }, [currentQuestionIndex, currentTest, answerFeedback]);
 
   if (!currentTest) {
     return (
@@ -84,7 +107,8 @@ const Test: React.FC = () => {
 
   const currentQuestion = currentTest.questions[currentQuestionIndex];
   const totalQuestions = currentTest.questions.length;
-  const progressPercentage = Math.round((Object.keys(currentAnswers).length / totalQuestions) * 100);
+  const answeredCount = Object.keys(currentAnswers).length;
+  const progressPercentage = Math.round((answeredCount / totalQuestions) * 100);
 
   const formatTime = (seconds: number) => {
     const minutes = Math.floor(seconds / 60);
@@ -92,8 +116,35 @@ const Test: React.FC = () => {
     return `${minutes}:${secs.toString().padStart(2, '0')}`;
   };
 
+  const getTimerColor = () => {
+    const percentage = (timeRemaining / (currentTest.timeLimit * 60)) * 100;
+    if (percentage <= 10) return 'bg-destructive text-destructive-foreground';
+    if (percentage <= 25) return 'bg-warning text-warning-foreground';
+    return 'bg-muted';
+  };
+
   const handleAnswerSelect = (questionId: string, answerIndex: number) => {
+    // Don't allow changing answers if feedback already shown
+    if (answerFeedback[questionId]?.shown) return;
+
     submitAnswer(questionId, answerIndex);
+
+    // Show immediate feedback
+    const question = currentTest.questions.find(q => q.id === questionId);
+    if (question) {
+      const isCorrect = answerIndex === question.correctAnswer;
+      setAnswerFeedback(prev => ({
+        ...prev,
+        [questionId]: {
+          questionId,
+          isCorrect,
+          correctAnswer: question.correctAnswer,
+          explanation: question.explanation,
+          shown: true
+        }
+      }));
+      setShowExplanation(true);
+    }
   };
 
   const handlePrevious = () => {
@@ -142,8 +193,9 @@ const Test: React.FC = () => {
   };
 
   const isQuestionAnswered = (questionId: string) => questionId in currentAnswers;
-  const allQuestionsAnswered = Object.keys(currentAnswers).length === totalQuestions;
-  const unansweredCount = totalQuestions - Object.keys(currentAnswers).length;
+  const allQuestionsAnswered = answeredCount === totalQuestions;
+  const unansweredCount = totalQuestions - answeredCount;
+  const currentFeedback = answerFeedback[currentQuestion.id];
 
   return (
     <div className="min-h-screen py-8 bg-gradient-to-b from-muted/30 to-background">
@@ -160,24 +212,21 @@ const Test: React.FC = () => {
               </div>
               
               <div className="flex items-center gap-4">
-                {/* Timer */}
-                <div className={`flex items-center gap-2 px-4 py-2 rounded-full ${
-                  timeRemaining < 300 
-                    ? 'bg-destructive/10 text-destructive' 
-                    : 'bg-muted'
-                }`}>
-                  <Clock className="h-4 w-4" />
-                  <span className="font-mono font-bold">{formatTime(timeRemaining)}</span>
-                </div>
-                
-                {/* Progress */}
-                <div className="hidden md:flex items-center gap-3 min-w-[200px]">
-                  <Progress value={progressPercentage} className="h-2" />
-                  <span className="text-sm text-muted-foreground whitespace-nowrap">
-                    {Object.keys(currentAnswers).length}/{totalQuestions}
-                  </span>
+                {/* Animated Timer */}
+                <div className={`flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300 ${getTimerColor()}`}>
+                  <Timer className={`h-4 w-4 ${timeRemaining <= 60 ? 'animate-pulse' : ''}`} />
+                  <span className="font-mono font-bold text-lg">{formatTime(timeRemaining)}</span>
                 </div>
               </div>
+            </div>
+
+            {/* Progress Bar */}
+            <div className="mt-4 space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-muted-foreground">Progress</span>
+                <span className="font-medium">{answeredCount} of {totalQuestions} answered</span>
+              </div>
+              <Progress value={progressPercentage} className="h-2" />
             </div>
           </CardContent>
         </Card>
@@ -189,11 +238,18 @@ const Test: React.FC = () => {
               <CardHeader className="pb-4">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg">
-                    Question {currentQuestionIndex + 1}
+                    Question {currentQuestionIndex + 1} of {totalQuestions}
                   </CardTitle>
-                  {isQuestionAnswered(currentQuestion.id) && (
-                    <Badge className="bg-success/10 text-success border-0">
-                      Answered
+                  {currentFeedback?.shown && (
+                    <Badge className={currentFeedback.isCorrect 
+                      ? "bg-success/10 text-success border-0" 
+                      : "bg-destructive/10 text-destructive border-0"
+                    }>
+                      {currentFeedback.isCorrect ? (
+                        <><CheckCircle className="h-3 w-3 mr-1" /> Correct</>
+                      ) : (
+                        <><XCircle className="h-3 w-3 mr-1" /> Incorrect</>
+                      )}
                     </Badge>
                   )}
                 </div>
@@ -207,34 +263,70 @@ const Test: React.FC = () => {
                   value={currentAnswers[currentQuestion.id]?.toString() || ''}
                   onValueChange={(value) => handleAnswerSelect(currentQuestion.id, parseInt(value))}
                   className="space-y-3"
+                  disabled={currentFeedback?.shown}
                 >
                   {currentQuestion.options.map((option, index) => {
                     const isSelected = currentAnswers[currentQuestion.id] === index;
+                    const isCorrectAnswer = currentFeedback?.shown && index === currentFeedback.correctAnswer;
+                    const isWrongSelected = currentFeedback?.shown && isSelected && !currentFeedback.isCorrect;
+                    
+                    let borderClass = 'border-border hover:border-muted-foreground/30';
+                    let bgClass = 'hover:bg-muted/50';
+                    
+                    if (currentFeedback?.shown) {
+                      if (isCorrectAnswer) {
+                        borderClass = 'border-success';
+                        bgClass = 'bg-success/10';
+                      } else if (isWrongSelected) {
+                        borderClass = 'border-destructive';
+                        bgClass = 'bg-destructive/10';
+                      }
+                    } else if (isSelected) {
+                      borderClass = 'border-primary';
+                      bgClass = 'bg-primary/5';
+                    }
+                    
                     return (
                       <div 
                         key={index} 
-                        className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all cursor-pointer ${
-                          isSelected 
-                            ? 'bg-primary/5 border-primary' 
-                            : 'hover:bg-muted/50 border-border hover:border-muted-foreground/30'
-                        }`}
-                        onClick={() => handleAnswerSelect(currentQuestion.id, index)}
+                        className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all ${
+                          currentFeedback?.shown ? '' : 'cursor-pointer'
+                        } ${bgClass} ${borderClass}`}
+                        onClick={() => !currentFeedback?.shown && handleAnswerSelect(currentQuestion.id, index)}
                       >
                         <RadioGroupItem 
                           value={index.toString()} 
                           id={`option-${index}`}
                           className={isSelected ? 'border-primary text-primary' : ''}
+                          disabled={currentFeedback?.shown}
                         />
                         <Label 
                           htmlFor={`option-${index}`} 
-                          className="flex-1 cursor-pointer text-base"
+                          className={`flex-1 ${currentFeedback?.shown ? '' : 'cursor-pointer'} text-base`}
                         >
                           {option}
                         </Label>
+                        {currentFeedback?.shown && isCorrectAnswer && (
+                          <CheckCircle className="h-5 w-5 text-success" />
+                        )}
+                        {isWrongSelected && (
+                          <XCircle className="h-5 w-5 text-destructive" />
+                        )}
                       </div>
                     );
                   })}
                 </RadioGroup>
+
+                {/* Explanation after answering */}
+                {showExplanation && currentFeedback?.explanation && (
+                  <Alert className="border-0 bg-muted/50 animate-in fade-in-50 slide-in-from-top-2">
+                    <Lightbulb className="h-4 w-4 text-primary" />
+                    <AlertDescription className="text-sm">
+                      <span className="font-medium">Explanation: </span>
+                      {currentFeedback.explanation}
+                    </AlertDescription>
+                  </Alert>
+                )}
               </CardContent>
             </Card>
 
@@ -282,16 +374,23 @@ const Test: React.FC = () => {
                   {currentTest.questions.map((question, index) => {
                     const isAnswered = isQuestionAnswered(question.id);
                     const isCurrent = index === currentQuestionIndex;
+                    const feedback = answerFeedback[question.id];
+                    
+                    let buttonClass = '';
+                    if (feedback?.shown) {
+                      buttonClass = feedback.isCorrect
+                        ? 'bg-success/20 border-success/40 text-success hover:bg-success/30 hover:text-success'
+                        : 'bg-destructive/20 border-destructive/40 text-destructive hover:bg-destructive/30 hover:text-destructive';
+                    } else if (isAnswered && !isCurrent) {
+                      buttonClass = 'bg-primary/10 border-primary/30 text-primary hover:bg-primary/20 hover:text-primary';
+                    }
+                    
                     return (
                       <Button
                         key={question.id}
                         variant={isCurrent ? 'default' : 'outline'}
                         size="sm"
-                        className={`text-xs h-9 w-9 p-0 ${
-                          isAnswered && !isCurrent
-                            ? 'bg-success/10 border-success/30 text-success hover:bg-success/20 hover:text-success'
-                            : ''
-                        }`}
+                        className={`text-xs h-9 w-9 p-0 ${buttonClass}`}
                         onClick={() => setCurrentQuestionIndex(index)}
                       >
                         {index + 1}
@@ -303,11 +402,17 @@ const Test: React.FC = () => {
                 <div className="mt-4 pt-4 border-t space-y-2">
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Answered</span>
-                    <Badge variant="secondary">{Object.keys(currentAnswers).length}</Badge>
+                    <Badge variant="secondary">{answeredCount}</Badge>
                   </div>
                   <div className="flex items-center justify-between text-sm">
                     <span className="text-muted-foreground">Remaining</span>
                     <Badge variant="outline">{unansweredCount}</Badge>
+                  </div>
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground">Correct</span>
+                    <Badge className="bg-success/10 text-success border-0">
+                      {Object.values(answerFeedback).filter(f => f.isCorrect).length}
+                    </Badge>
                   </div>
                 </div>
 
