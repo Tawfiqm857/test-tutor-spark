@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,29 +41,41 @@ const Test: React.FC = () => {
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [answerFeedback, setAnswerFeedback] = useState<Record<string, AnswerFeedback>>({});
   const [showExplanation, setShowExplanation] = useState(false);
+  
+  const hasStartedRef = useRef<string | null>(null);
 
+  // Initialize test only once when testId changes
   useEffect(() => {
-    if (testId && testId !== currentTest?.id) {
-      const test = tests.find(t => t.id === testId);
-      if (!test) {
-        toast({
-          title: 'Test not found',
-          description: 'The requested test could not be found.',
-          variant: 'destructive',
-        });
-        navigate('/dashboard');
-        return;
-      }
-      
-      startTest(testId);
-      setTimeRemaining(test.timeLimit * 60);
-      setAnswerFeedback({});
+    if (!testId) return;
+    
+    // Only start if we haven't started this test yet
+    if (hasStartedRef.current === testId) return;
+    
+    const test = tests.find(t => t.id === testId);
+    if (!test) {
+      toast({
+        title: 'Test not found',
+        description: 'The requested test could not be found.',
+        variant: 'destructive',
+      });
+      navigate('/dashboard');
+      return;
     }
+    
+    hasStartedRef.current = testId;
+    startTest(testId);
+    setTimeRemaining(test.timeLimit * 60);
+    setAnswerFeedback({});
+    setCurrentQuestionIndex(0);
+  }, [testId, tests, navigate, toast, startTest]);
 
+  // Cleanup only on unmount
+  useEffect(() => {
     return () => {
+      hasStartedRef.current = null;
       resetCurrentTest();
     };
-  }, [testId, tests, startTest, resetCurrentTest, navigate, toast, currentTest?.id]);
+  }, [resetCurrentTest]);
 
   useEffect(() => {
     if (timeRemaining > 0) {
@@ -123,29 +135,31 @@ const Test: React.FC = () => {
     return 'bg-muted';
   };
 
-  const handleAnswerSelect = (questionId: string, answerIndex: number) => {
+  const handleAnswerSelect = useCallback((questionId: string, answerIndex: number) => {
     // Don't allow changing answers if feedback already shown
     if (answerFeedback[questionId]?.shown) return;
 
     submitAnswer(questionId, answerIndex);
 
     // Show immediate feedback
-    const question = currentTest.questions.find(q => q.id === questionId);
-    if (question) {
-      const isCorrect = answerIndex === question.correctAnswer;
-      setAnswerFeedback(prev => ({
-        ...prev,
-        [questionId]: {
-          questionId,
-          isCorrect,
-          correctAnswer: question.correctAnswer,
-          explanation: question.explanation,
-          shown: true
-        }
-      }));
-      setShowExplanation(true);
+    if (currentTest) {
+      const question = currentTest.questions.find(q => q.id === questionId);
+      if (question) {
+        const isCorrect = answerIndex === question.correctAnswer;
+        setAnswerFeedback(prev => ({
+          ...prev,
+          [questionId]: {
+            questionId,
+            isCorrect,
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            shown: true
+          }
+        }));
+        setShowExplanation(true);
+      }
     }
-  };
+  }, [answerFeedback, submitAnswer, currentTest]);
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
@@ -260,10 +274,13 @@ const Test: React.FC = () => {
                 </CardDescription>
 
                 <RadioGroup
-                  value={currentAnswers[currentQuestion.id]?.toString() || ''}
-                  onValueChange={(value) => handleAnswerSelect(currentQuestion.id, parseInt(value))}
+                  value={currentAnswers[currentQuestion.id] !== undefined ? currentAnswers[currentQuestion.id].toString() : ''}
+                  onValueChange={(value) => {
+                    if (!currentFeedback?.shown) {
+                      handleAnswerSelect(currentQuestion.id, parseInt(value));
+                    }
+                  }}
                   className="space-y-3"
-                  disabled={currentFeedback?.shown}
                 >
                   {currentQuestion.options.map((option, index) => {
                     const isSelected = currentAnswers[currentQuestion.id] === index;
@@ -288,7 +305,7 @@ const Test: React.FC = () => {
                     
                     return (
                       <div 
-                        key={index} 
+                        key={`${currentQuestion.id}-${index}`} 
                         className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all ${
                           currentFeedback?.shown ? '' : 'cursor-pointer'
                         } ${bgClass} ${borderClass}`}
@@ -296,12 +313,12 @@ const Test: React.FC = () => {
                       >
                         <RadioGroupItem 
                           value={index.toString()} 
-                          id={`option-${index}`}
+                          id={`${currentQuestion.id}-option-${index}`}
                           className={isSelected ? 'border-primary text-primary' : ''}
                           disabled={currentFeedback?.shown}
                         />
                         <Label 
-                          htmlFor={`option-${index}`} 
+                          htmlFor={`${currentQuestion.id}-option-${index}`} 
                           className={`flex-1 ${currentFeedback?.shown ? '' : 'cursor-pointer'} text-base`}
                         >
                           {option}
