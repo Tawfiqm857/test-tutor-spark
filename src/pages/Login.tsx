@@ -63,16 +63,37 @@ const Login: React.FC = () => {
     setIsLoading(true);
     
     try {
-      const success = await login(email, password);
+      const result = await login(email, password);
       
-      if (success) {
+      if (result.success) {
         toast({
           title: 'Welcome back!',
           description: 'You have successfully signed in.',
         });
         navigate(from, { replace: true });
       } else {
-        setErrors({ general: 'Invalid email or password. Please check your credentials and try again.' });
+        // Provide specific error messages based on error type
+        switch (result.error) {
+          case 'user_not_found':
+            setErrors({ 
+              general: 'No account found with this email address. Please check your email or create a new account.' 
+            });
+            break;
+          case 'invalid_credentials':
+            setErrors({ 
+              general: 'Incorrect password. Please try again or use the forgot password option.' 
+            });
+            break;
+          case 'email_not_confirmed':
+            setErrors({ 
+              general: 'Please verify your email address before signing in. Check your inbox for a confirmation link.' 
+            });
+            break;
+          default:
+            setErrors({ 
+              general: 'Something went wrong. Please try again later.' 
+            });
+        }
       }
     } catch (error) {
       setErrors({ general: 'Something went wrong. Please try again later.' });

@@ -9,9 +9,14 @@ interface User {
   avatar?: string;
 }
 
+interface LoginResult {
+  success: boolean;
+  error?: 'invalid_credentials' | 'user_not_found' | 'email_not_confirmed' | 'server_error';
+}
+
 interface AuthContextType {
   user: User | null;
-  login: (email: string, password: string) => Promise<boolean>;
+  login: (email: string, password: string) => Promise<LoginResult>;
   signup: (name: string, email: string, password: string) => Promise<boolean>;
   logout: () => void;
   updateAvatar: (avatar: string) => void;
@@ -35,31 +40,37 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener FIRST
+    // Set up auth state listener FIRST - keep it synchronous to avoid deadlocks
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
+      (event, session) => {
         setSession(session);
-        setLoading(true);
         
         if (session?.user) {
-          // Get or create profile
-          const profile = await getOrCreateProfile(session.user);
-          setUser(profile);
+          // Defer Supabase calls with setTimeout to avoid deadlock
+          setTimeout(() => {
+            getOrCreateProfile(session.user).then(profile => {
+              setUser(profile);
+              setLoading(false);
+            });
+          }, 0);
         } else {
           setUser(null);
+          setLoading(false);
         }
-        setLoading(false);
       }
     );
 
     // THEN check for existing session
-    supabase.auth.getSession().then(async ({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       if (session?.user) {
-        const profile = await getOrCreateProfile(session.user);
-        setUser(profile);
+        getOrCreateProfile(session.user).then(profile => {
+          setUser(profile);
+          setLoading(false);
+        });
+      } else {
+        setLoading(false);
       }
-      setLoading(false);
     });
 
     return () => subscription.unsubscribe();
@@ -124,7 +135,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const login = async (email: string, password: string): Promise<boolean> => {
+  const login = async (email: string, password: string): Promise<LoginResult> => {
     try {
       const { error } = await supabase.auth.signInWithPassword({
         email,
@@ -132,14 +143,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       
       if (error) {
-        console.error('Login error:', error);
-        return false;
+        console.error('Login error:', error.message, error.code);
+        
+        // Parse error to provide specific feedback
+        if (error.message.includes('Invalid login credentials')) {
+          // Check if user exists by attempting a password reset
+          const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
+            redirectTo: `${window.location.origin}/reset-password`
+          });
+          
+          // If reset also fails with "User not found", user doesn't exist
+          if (resetError?.message?.includes('User not found') || resetError?.message?.includes('Unable to validate')) {
+            return { success: false, error: 'user_not_found' };
+          }
+          // Otherwise it's wrong password
+          return { success: false, error: 'invalid_credentials' };
+        }
+        
+        if (error.message.includes('Email not confirmed')) {
+          return { success: false, error: 'email_not_confirmed' };
+        }
+        
+        return { success: false, error: 'server_error' };
       }
       
-      return true;
+      return { success: true };
     } catch (error) {
       console.error('Login error:', error);
-      return false;
+      return { success: false, error: 'server_error' };
     }
   };
 
