@@ -29,73 +29,73 @@ const App = () => (
       <ThemeProvider>
         <AuthProvider>
           <TestProvider>
-          {/* HashRouter works well for GitHub Pages */}
-          <Router>
-            <div className="min-h-screen flex flex-col">
-              <Header />
-              <main className="flex-1">
-                <Routes>
-                  <Route path="/" element={<Home />} />
-                  <Route path="/login" element={<Login />} />
-                  <Route path="/signup" element={<Signup />} />
-                  <Route
-                    path="/dashboard"
-                    element={
-                      <ProtectedRoute>
-                        <Dashboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/test/:testId"
-                    element={
-                      <ProtectedRoute>
-                        <Test />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/results"
-                    element={
-                      <ProtectedRoute>
-                        <Results />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/student-performance"
-                    element={
-                      <ProtectedRoute>
-                        <StudentPerformance />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/leaderboard"
-                    element={
-                      <ProtectedRoute>
-                        <Leaderboard />
-                      </ProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/admin"
-                    element={
-                      <ProtectedRoute>
-                        <Admin />
-                      </ProtectedRoute>
-                    }
-                  />
-                  {/* Catch-all route */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </main>
-              <Footer />
-              <BackToTop />
-            </div>
-            <Toaster />
-            <Sonner />
-          </Router>
+            {/* HashRouter works well for GitHub Pages */}
+            <Router>
+              <div className="min-h-screen flex flex-col">
+                <Header />
+                <main className="flex-1">
+                  <Routes>
+                    <Route path="/" element={<Home />} />
+                    <Route path="/login" element={<Login />} />
+                    <Route path="/signup" element={<Signup />} />
+                    <Route
+                      path="/dashboard"
+                      element={
+                        <ProtectedRoute>
+                          <Dashboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/test/:testId"
+                      element={
+                        <ProtectedRoute>
+                          <Test />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/results"
+                      element={
+                        <ProtectedRoute>
+                          <Results />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/student-performance"
+                      element={
+                        <ProtectedRoute>
+                          <StudentPerformance />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/leaderboard"
+                      element={
+                        <ProtectedRoute>
+                          <Leaderboard />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
+                      path="/admin"
+                      element={
+                        <ProtectedRoute>
+                          <Admin />
+                        </ProtectedRoute>
+                      }
+                    />
+                    {/* Catch-all route */}
+                    <Route path="*" element={<NotFound />} />
+                  </Routes>
+                </main>
+                <Footer />
+                <BackToTop />
+              </div>
+              <Toaster />
+              <Sonner />
+            </Router>
           </TestProvider>
         </AuthProvider>
       </ThemeProvider>
