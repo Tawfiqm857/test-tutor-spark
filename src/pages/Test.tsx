@@ -33,18 +33,30 @@ const Test: React.FC = () => {
   const { testId } = useParams<{ testId: string }>();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { tests, startTest, currentTest, currentAnswers, submitAnswer, submitTest, resetCurrentTest } = useTest();
+  const { 
+    tests, 
+    startTest, 
+    currentTest, 
+    currentAnswers, 
+    submitAnswer, 
+    submitTest, 
+    resetCurrentTest,
+    saveProgressToStorage,
+    clearSavedProgress,
+    loadSavedProgress
+  } = useTest();
 
   const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
   const [timeRemaining, setTimeRemaining] = useState(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [answerFeedback, setAnswerFeedback] = useState<Record<string, AnswerFeedback>>({});
-  const [showExplanation, setShowExplanation] = useState(false);
+  const [isTestCompleted, setIsTestCompleted] = useState(false);
   
   const hasStartedRef = useRef<string | null>(null);
+  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Initialize test only once when testId changes
+  // Initialize test - check for saved progress
   useEffect(() => {
     if (!testId) return;
     
@@ -63,43 +75,80 @@ const Test: React.FC = () => {
     }
     
     hasStartedRef.current = testId;
-    startTest(testId);
-    setTimeRemaining(test.timeLimit * 60);
+    
+    // Check for saved progress
+    const saved = loadSavedProgress(testId);
+    if (saved) {
+      startTest(testId);
+      // Restore saved state
+      setTimeRemaining(saved.timeRemaining);
+      setCurrentQuestionIndex(saved.currentQuestionIndex);
+      // Restore answers through submitAnswer
+      Object.entries(saved.currentAnswers).forEach(([qId, answer]) => {
+        submitAnswer(qId, answer);
+      });
+      toast({
+        title: 'Progress restored',
+        description: 'Your previous progress has been restored.',
+      });
+    } else {
+      startTest(testId);
+      setTimeRemaining(test.timeLimit * 60);
+    }
+    
     setAnswerFeedback({});
-    setCurrentQuestionIndex(0);
-  }, [testId, tests, navigate, toast, startTest]);
+    setIsTestCompleted(false);
+  }, [testId, tests, navigate, toast, startTest, loadSavedProgress, submitAnswer]);
+
+  // Auto-save progress every 10 seconds
+  useEffect(() => {
+    if (!currentTest || isTestCompleted) return;
+    
+    autoSaveIntervalRef.current = setInterval(() => {
+      saveProgressToStorage(timeRemaining, currentQuestionIndex);
+    }, 10000);
+    
+    return () => {
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
+    };
+  }, [currentTest, isTestCompleted, timeRemaining, currentQuestionIndex, saveProgressToStorage]);
+
+  // Save on page unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      if (currentTest && !isTestCompleted) {
+        saveProgressToStorage(timeRemaining, currentQuestionIndex);
+      }
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [currentTest, isTestCompleted, timeRemaining, currentQuestionIndex, saveProgressToStorage]);
 
   // Cleanup only on unmount
   useEffect(() => {
     return () => {
       hasStartedRef.current = null;
+      if (autoSaveIntervalRef.current) {
+        clearInterval(autoSaveIntervalRef.current);
+      }
       resetCurrentTest();
     };
   }, [resetCurrentTest]);
 
   useEffect(() => {
-    if (timeRemaining > 0) {
+    if (timeRemaining > 0 && !isTestCompleted) {
       const timer = setTimeout(() => {
         setTimeRemaining(prev => prev - 1);
       }, 1000);
 
       return () => clearTimeout(timer);
-    } else if (timeRemaining === 0 && currentTest) {
+    } else if (timeRemaining === 0 && currentTest && !isTestCompleted) {
       handleSubmitTest();
     }
-  }, [timeRemaining, currentTest]);
-
-  // Reset explanation visibility when changing questions
-  useEffect(() => {
-    if (currentTest) {
-      const questionId = currentTest.questions[currentQuestionIndex]?.id;
-      if (questionId && answerFeedback[questionId]?.shown) {
-        setShowExplanation(true);
-      } else {
-        setShowExplanation(false);
-      }
-    }
-  }, [currentQuestionIndex, currentTest, answerFeedback]);
+  }, [timeRemaining, currentTest, isTestCompleted]);
 
   if (!currentTest) {
     return (
@@ -136,30 +185,30 @@ const Test: React.FC = () => {
   };
 
   const handleAnswerSelect = useCallback((questionId: string, answerIndex: number) => {
-    // Don't allow changing answers if feedback already shown
-    if (answerFeedback[questionId]?.shown) return;
+    // Don't allow changing answers if test is completed
+    if (isTestCompleted) return;
 
     submitAnswer(questionId, answerIndex);
+  }, [isTestCompleted, submitAnswer]);
 
-    // Show immediate feedback
-    if (currentTest) {
-      const question = currentTest.questions.find(q => q.id === questionId);
-      if (question) {
-        const isCorrect = answerIndex === question.correctAnswer;
-        setAnswerFeedback(prev => ({
-          ...prev,
-          [questionId]: {
-            questionId,
-            isCorrect,
-            correctAnswer: question.correctAnswer,
-            explanation: question.explanation,
-            shown: true
-          }
-        }));
-        setShowExplanation(true);
-      }
-    }
-  }, [answerFeedback, submitAnswer, currentTest]);
+  // Generate feedback for all questions when test is completed
+  const generateFeedback = useCallback(() => {
+    if (!currentTest) return;
+    
+    const feedback: Record<string, AnswerFeedback> = {};
+    currentTest.questions.forEach(question => {
+      const userAnswer = currentAnswers[question.id];
+      const isCorrect = userAnswer === question.correctAnswer;
+      feedback[question.id] = {
+        questionId: question.id,
+        isCorrect,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        shown: true
+      };
+    });
+    setAnswerFeedback(feedback);
+  }, [currentTest, currentAnswers]);
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
@@ -180,11 +229,13 @@ const Test: React.FC = () => {
     try {
       const result = await submitTest();
       if (result) {
+        setIsTestCompleted(true);
+        generateFeedback();
+        clearSavedProgress();
         toast({
           title: 'Test submitted!',
-          description: `You scored ${result.score}% on this test.`,
+          description: `You scored ${result.score}% on this test. Review your answers below.`,
         });
-        navigate('/results', { state: { result } });
       }
     } catch (error) {
       toast({
@@ -254,7 +305,7 @@ const Test: React.FC = () => {
                   <CardTitle className="text-lg">
                     Question {currentQuestionIndex + 1} of {totalQuestions}
                   </CardTitle>
-                  {currentFeedback?.shown && (
+                  {isTestCompleted && currentFeedback?.shown && (
                     <Badge className={currentFeedback.isCorrect 
                       ? "bg-success/10 text-success border-0" 
                       : "bg-destructive/10 text-destructive border-0"
@@ -276,7 +327,7 @@ const Test: React.FC = () => {
                 <RadioGroup
                   value={currentAnswers[currentQuestion.id] !== undefined ? currentAnswers[currentQuestion.id].toString() : ''}
                   onValueChange={(value) => {
-                    if (!currentFeedback?.shown) {
+                    if (!isTestCompleted) {
                       handleAnswerSelect(currentQuestion.id, parseInt(value));
                     }
                   }}
@@ -284,13 +335,13 @@ const Test: React.FC = () => {
                 >
                   {currentQuestion.options.map((option, index) => {
                     const isSelected = currentAnswers[currentQuestion.id] === index;
-                    const isCorrectAnswer = currentFeedback?.shown && index === currentFeedback.correctAnswer;
-                    const isWrongSelected = currentFeedback?.shown && isSelected && !currentFeedback.isCorrect;
+                    const isCorrectAnswer = isTestCompleted && currentFeedback?.shown && index === currentFeedback.correctAnswer;
+                    const isWrongSelected = isTestCompleted && currentFeedback?.shown && isSelected && !currentFeedback.isCorrect;
                     
                     let borderClass = 'border-border hover:border-muted-foreground/30';
                     let bgClass = 'hover:bg-muted/50';
                     
-                    if (currentFeedback?.shown) {
+                    if (isTestCompleted && currentFeedback?.shown) {
                       if (isCorrectAnswer) {
                         borderClass = 'border-success';
                         bgClass = 'bg-success/10';
@@ -307,23 +358,23 @@ const Test: React.FC = () => {
                       <div 
                         key={`${currentQuestion.id}-${index}`} 
                         className={`flex items-center space-x-3 p-4 rounded-xl border-2 transition-all ${
-                          currentFeedback?.shown ? '' : 'cursor-pointer'
+                          isTestCompleted ? '' : 'cursor-pointer'
                         } ${bgClass} ${borderClass}`}
-                        onClick={() => !currentFeedback?.shown && handleAnswerSelect(currentQuestion.id, index)}
+                        onClick={() => !isTestCompleted && handleAnswerSelect(currentQuestion.id, index)}
                       >
                         <RadioGroupItem 
                           value={index.toString()} 
                           id={`${currentQuestion.id}-option-${index}`}
                           className={isSelected ? 'border-primary text-primary' : ''}
-                          disabled={currentFeedback?.shown}
+                          disabled={isTestCompleted}
                         />
                         <Label 
                           htmlFor={`${currentQuestion.id}-option-${index}`} 
-                          className={`flex-1 ${currentFeedback?.shown ? '' : 'cursor-pointer'} text-base`}
+                          className={`flex-1 ${isTestCompleted ? '' : 'cursor-pointer'} text-base`}
                         >
                           {option}
                         </Label>
-                        {currentFeedback?.shown && isCorrectAnswer && (
+                        {isTestCompleted && isCorrectAnswer && (
                           <CheckCircle className="h-5 w-5 text-success" />
                         )}
                         {isWrongSelected && (
@@ -334,8 +385,8 @@ const Test: React.FC = () => {
                   })}
                 </RadioGroup>
 
-                {/* Explanation after answering */}
-                {showExplanation && currentFeedback?.explanation && (
+                {/* Explanation after test completion */}
+                {isTestCompleted && currentFeedback?.explanation && (
                   <Alert className="border-0 bg-muted/50 animate-in fade-in-50 slide-in-from-top-2">
                     <Lightbulb className="h-4 w-4 text-primary" />
                     <AlertDescription className="text-sm">
@@ -360,7 +411,12 @@ const Test: React.FC = () => {
               </Button>
 
               <div className="flex items-center gap-3">
-                {currentQuestionIndex < totalQuestions - 1 ? (
+                {isTestCompleted ? (
+                  <Button onClick={() => navigate('/results')} size="lg" className="bg-success hover:bg-success/90">
+                    View Results
+                    <ChevronRight className="ml-2 h-4 w-4" />
+                  </Button>
+                ) : currentQuestionIndex < totalQuestions - 1 ? (
                   <Button onClick={handleNext} size="lg">
                     Next
                     <ChevronRight className="ml-2 h-4 w-4" />
@@ -394,7 +450,7 @@ const Test: React.FC = () => {
                     const feedback = answerFeedback[question.id];
                     
                     let buttonClass = '';
-                    if (feedback?.shown) {
+                    if (isTestCompleted && feedback?.shown) {
                       buttonClass = feedback.isCorrect
                         ? 'bg-success/20 border-success/40 text-success hover:bg-success/30 hover:text-success'
                         : 'bg-destructive/20 border-destructive/40 text-destructive hover:bg-destructive/30 hover:text-destructive';
@@ -425,15 +481,17 @@ const Test: React.FC = () => {
                     <span className="text-muted-foreground">Remaining</span>
                     <Badge variant="outline">{unansweredCount}</Badge>
                   </div>
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Correct</span>
-                    <Badge className="bg-success/10 text-success border-0">
-                      {Object.values(answerFeedback).filter(f => f.isCorrect).length}
-                    </Badge>
-                  </div>
+                  {isTestCompleted && (
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Correct</span>
+                      <Badge className="bg-success/10 text-success border-0">
+                        {Object.values(answerFeedback).filter(f => f.isCorrect).length}
+                      </Badge>
+                    </div>
+                  )}
                 </div>
 
-                {allQuestionsAnswered && (
+                {!isTestCompleted && allQuestionsAnswered && (
                   <Button
                     onClick={handleSubmitClick}
                     disabled={isSubmitting}
@@ -441,6 +499,15 @@ const Test: React.FC = () => {
                   >
                     <Send className="mr-2 h-4 w-4" />
                     Submit Test
+                  </Button>
+                )}
+                
+                {isTestCompleted && (
+                  <Button
+                    onClick={() => navigate('/results')}
+                    className="w-full mt-4 bg-success hover:bg-success/90"
+                  >
+                    View Results
                   </Button>
                 )}
               </CardContent>
