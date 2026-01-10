@@ -14,7 +14,7 @@ export default defineConfig(({ mode }) => {
   const SUPABASE_PROJECT_ID = process.env.VITE_SUPABASE_PROJECT_ID || fileEnv.VITE_SUPABASE_PROJECT_ID || "mkzcdvcqzimjkqlwljhv";
 
   return {
-    base: "/studylane-dashboard/",
+    base: "/",
     server: {
       host: "::",
       port: 8080,
