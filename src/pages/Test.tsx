@@ -43,7 +43,7 @@ const Test: React.FC = () => {
   const [showExplanation, setShowExplanation] = useState(false);
 
   useEffect(() => {
-    if (testId) {
+    if (testId && testId !== currentTest?.id) {
       const test = tests.find(t => t.id === testId);
       if (!test) {
         toast({
@@ -63,7 +63,7 @@ const Test: React.FC = () => {
     return () => {
       resetCurrentTest();
     };
-  }, [testId, tests, startTest, resetCurrentTest, navigate, toast]);
+  }, [testId, tests, startTest, resetCurrentTest, navigate, toast, currentTest?.id]);
 
   useEffect(() => {
     if (timeRemaining > 0) {

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { backend as supabase } from '@/integrations/backend/client';
 import { useAuth } from './AuthContext';
 
@@ -1471,20 +1471,20 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return test?.subject || 'HTML';
   };
 
-  const startTest = (testId: string) => {
+  const startTest = useCallback((testId: string) => {
     const test = tests.find(t => t.id === testId);
     if (test) {
       setCurrentTest(test);
       setCurrentAnswers({});
     }
-  };
+  }, [tests]);
 
-  const submitAnswer = (questionId: string, answer: number) => {
+  const submitAnswer = useCallback((questionId: string, answer: number) => {
     setCurrentAnswers(prev => ({
       ...prev,
       [questionId]: answer
     }));
-  };
+  }, []);
 
   const submitTest = async (): Promise<TestAttempt | null> => {
     if (!currentTest || !user || !isAuthenticated) return null;
@@ -1600,19 +1600,19 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  const resetCurrentTest = () => {
+  const resetCurrentTest = useCallback(() => {
     setCurrentTest(null);
     setCurrentAnswers({});
-  };
+  }, []);
 
-  const getTestProgress = (testId: string): TestProgress => {
+  const getTestProgress = useCallback((testId: string): TestProgress => {
     return testProgress[testId] || {
       testId,
       attempts: 0,
       bestScore: 0,
       status: 'not-started'
     };
-  };
+  }, [testProgress]);
 
   const value = {
     tests,
