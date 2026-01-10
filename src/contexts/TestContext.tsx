@@ -37,6 +37,14 @@ export interface TestProgress {
   status: 'not-started' | 'in-progress' | 'completed';
 }
 
+interface SavedTestProgress {
+  testId: string;
+  currentAnswers: Record<string, number>;
+  timeRemaining: number;
+  currentQuestionIndex: number;
+  savedAt: number;
+}
+
 interface TestContextType {
   tests: Test[];
   testProgress: Record<string, TestProgress>;
@@ -47,6 +55,10 @@ interface TestContextType {
   submitTest: () => Promise<TestAttempt | null>;
   resetCurrentTest: () => void;
   getTestProgress: (testId: string) => TestProgress;
+  savedProgress: SavedTestProgress | null;
+  saveProgressToStorage: (timeRemaining: number, currentQuestionIndex: number) => void;
+  clearSavedProgress: () => void;
+  loadSavedProgress: (testId: string) => SavedTestProgress | null;
 }
 
 const TestContext = createContext<TestContextType | undefined>(undefined);
@@ -1372,6 +1384,8 @@ const mockTests: Test[] = [
   }
 ];
 
+const STORAGE_KEY = 'test_progress_autosave';
+
 export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
   const [tests] = useState<Test[]>(mockTests);
@@ -1379,6 +1393,52 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [currentTest, setCurrentTest] = useState<Test | null>(null);
   const [currentAnswers, setCurrentAnswers] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
+  const [savedProgress, setSavedProgress] = useState<SavedTestProgress | null>(null);
+
+  // Load saved progress from localStorage on mount
+  const loadSavedProgress = useCallback((testId: string): SavedTestProgress | null => {
+    try {
+      const saved = localStorage.getItem(`${STORAGE_KEY}_${testId}`);
+      if (saved) {
+        const parsed = JSON.parse(saved) as SavedTestProgress;
+        // Check if saved less than 2 hours ago
+        if (Date.now() - parsed.savedAt < 2 * 60 * 60 * 1000) {
+          return parsed;
+        } else {
+          localStorage.removeItem(`${STORAGE_KEY}_${testId}`);
+        }
+      }
+    } catch (error) {
+      console.error('Error loading saved progress:', error);
+    }
+    return null;
+  }, []);
+
+  const saveProgressToStorage = useCallback((timeRemaining: number, currentQuestionIndex: number) => {
+    if (!currentTest) return;
+    
+    const progress: SavedTestProgress = {
+      testId: currentTest.id,
+      currentAnswers,
+      timeRemaining,
+      currentQuestionIndex,
+      savedAt: Date.now()
+    };
+    
+    try {
+      localStorage.setItem(`${STORAGE_KEY}_${currentTest.id}`, JSON.stringify(progress));
+      setSavedProgress(progress);
+    } catch (error) {
+      console.error('Error saving progress:', error);
+    }
+  }, [currentTest, currentAnswers]);
+
+  const clearSavedProgress = useCallback(() => {
+    if (currentTest) {
+      localStorage.removeItem(`${STORAGE_KEY}_${currentTest.id}`);
+    }
+    setSavedProgress(null);
+  }, [currentTest]);
 
   // Load user's quiz progress from Supabase
   useEffect(() => {
@@ -1623,7 +1683,11 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     submitAnswer,
     submitTest,
     resetCurrentTest,
-    getTestProgress
+    getTestProgress,
+    savedProgress,
+    saveProgressToStorage,
+    clearSavedProgress,
+    loadSavedProgress
   };
 
   return <TestContext.Provider value={value}>{children}</TestContext.Provider>;
