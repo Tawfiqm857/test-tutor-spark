@@ -138,6 +138,32 @@ const Test: React.FC = () => {
     };
   }, [resetCurrentTest]);
 
+  // Timer effect - auto-submit when time runs out
+  const handleAutoSubmit = useCallback(async () => {
+    setShowConfirmDialog(false);
+    setIsSubmitting(true);
+    
+    try {
+      const result = await submitTest();
+      if (result) {
+        setIsTestCompleted(true);
+        clearSavedProgress();
+        toast({
+          title: 'Test submitted!',
+          description: `You scored ${result.score}% on this test. Review your answers below.`,
+        });
+      }
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to submit test. Please try again.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  }, [submitTest, clearSavedProgress, toast]);
+
   useEffect(() => {
     if (timeRemaining > 0 && !isTestCompleted) {
       const timer = setTimeout(() => {
@@ -146,9 +172,9 @@ const Test: React.FC = () => {
 
       return () => clearTimeout(timer);
     } else if (timeRemaining === 0 && currentTest && !isTestCompleted) {
-      handleSubmitTest();
+      handleAutoSubmit();
     }
-  }, [timeRemaining, currentTest, isTestCompleted]);
+  }, [timeRemaining, currentTest, isTestCompleted, handleAutoSubmit]);
 
   if (!currentTest) {
     return (
@@ -210,6 +236,13 @@ const Test: React.FC = () => {
     setAnswerFeedback(feedback);
   }, [currentTest, currentAnswers]);
 
+  // Auto-generate feedback when test is completed
+  useEffect(() => {
+    if (isTestCompleted && currentTest) {
+      generateFeedback();
+    }
+  }, [isTestCompleted, currentTest, generateFeedback]);
+
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
       setCurrentQuestionIndex(currentQuestionIndex - 1);
@@ -222,38 +255,12 @@ const Test: React.FC = () => {
     }
   };
 
-  const handleSubmitTest = async () => {
-    setShowConfirmDialog(false);
-    setIsSubmitting(true);
-    
-    try {
-      const result = await submitTest();
-      if (result) {
-        setIsTestCompleted(true);
-        generateFeedback();
-        clearSavedProgress();
-        toast({
-          title: 'Test submitted!',
-          description: `You scored ${result.score}% on this test. Review your answers below.`,
-        });
-      }
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: 'Failed to submit test. Please try again.',
-        variant: 'destructive',
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
   const handleSubmitClick = () => {
     const unansweredQuestions = currentTest.questions.filter(q => !(q.id in currentAnswers));
     if (unansweredQuestions.length > 0 && timeRemaining > 0) {
       setShowConfirmDialog(true);
     } else {
-      handleSubmitTest();
+      handleAutoSubmit();
     }
   };
 
@@ -531,7 +538,7 @@ const Test: React.FC = () => {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Continue Test</AlertDialogCancel>
-            <AlertDialogAction onClick={handleSubmitTest} className="bg-success hover:bg-success/90">
+            <AlertDialogAction onClick={handleAutoSubmit} className="bg-success hover:bg-success/90">
               Submit Anyway
             </AlertDialogAction>
           </AlertDialogFooter>
