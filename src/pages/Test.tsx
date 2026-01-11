@@ -176,6 +176,40 @@ const Test: React.FC = () => {
     }
   }, [timeRemaining, currentTest, isTestCompleted, handleAutoSubmit]);
 
+  // Handle answer selection
+  const handleAnswerSelect = useCallback((questionId: string, answerIndex: number) => {
+    // Don't allow changing answers if test is completed
+    if (isTestCompleted) return;
+    submitAnswer(questionId, answerIndex);
+  }, [isTestCompleted, submitAnswer]);
+
+  // Generate feedback for all questions when test is completed
+  const generateFeedback = useCallback(() => {
+    if (!currentTest) return;
+    
+    const feedback: Record<string, AnswerFeedback> = {};
+    currentTest.questions.forEach(question => {
+      const userAnswer = currentAnswers[question.id];
+      const isCorrect = userAnswer === question.correctAnswer;
+      feedback[question.id] = {
+        questionId: question.id,
+        isCorrect,
+        correctAnswer: question.correctAnswer,
+        explanation: question.explanation,
+        shown: true
+      };
+    });
+    setAnswerFeedback(feedback);
+  }, [currentTest, currentAnswers]);
+
+  // Auto-generate feedback when test is completed
+  useEffect(() => {
+    if (isTestCompleted && currentTest) {
+      generateFeedback();
+    }
+  }, [isTestCompleted, currentTest, generateFeedback]);
+
+  // Early return for loading state - ALL HOOKS MUST BE ABOVE THIS
   if (!currentTest) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -209,39 +243,6 @@ const Test: React.FC = () => {
     if (percentage <= 25) return 'bg-warning text-warning-foreground';
     return 'bg-muted';
   };
-
-  const handleAnswerSelect = useCallback((questionId: string, answerIndex: number) => {
-    // Don't allow changing answers if test is completed
-    if (isTestCompleted) return;
-
-    submitAnswer(questionId, answerIndex);
-  }, [isTestCompleted, submitAnswer]);
-
-  // Generate feedback for all questions when test is completed
-  const generateFeedback = useCallback(() => {
-    if (!currentTest) return;
-    
-    const feedback: Record<string, AnswerFeedback> = {};
-    currentTest.questions.forEach(question => {
-      const userAnswer = currentAnswers[question.id];
-      const isCorrect = userAnswer === question.correctAnswer;
-      feedback[question.id] = {
-        questionId: question.id,
-        isCorrect,
-        correctAnswer: question.correctAnswer,
-        explanation: question.explanation,
-        shown: true
-      };
-    });
-    setAnswerFeedback(feedback);
-  }, [currentTest, currentAnswers]);
-
-  // Auto-generate feedback when test is completed
-  useEffect(() => {
-    if (isTestCompleted && currentTest) {
-      generateFeedback();
-    }
-  }, [isTestCompleted, currentTest, generateFeedback]);
 
   const handlePrevious = () => {
     if (currentQuestionIndex > 0) {
