@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTheme } from '@/contexts/ThemeContext';
 import { 
-  BookOpen, 
   User, 
   LogOut, 
   Home, 
@@ -13,7 +12,8 @@ import {
   Moon, 
   Sun,
   Menu,
-  X
+  X,
+  GraduationCap
 } from 'lucide-react';
 import { Avatar, AvatarImage, AvatarFallback } from '@/components/ui/avatar';
 import {
@@ -23,6 +23,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import logo from '@/assets/logo.png';
 
 const Header: React.FC = () => {
   const { user, logout, isAuthenticated } = useAuth();
@@ -51,6 +52,7 @@ const Header: React.FC = () => {
     { path: '/', label: 'Home', icon: Home },
     ...(isAuthenticated ? [
       { path: '/dashboard', label: 'Dashboard', icon: BarChart3 },
+      { path: '/exams', label: 'Exams', icon: GraduationCap },
       { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     ] : []),
   ];
@@ -60,12 +62,7 @@ const Header: React.FC = () => {
       <div className="container flex h-16 items-center justify-between">
         {/* Logo */}
         <Link to="/" className="flex items-center space-x-2 group">
-          <div className="p-1.5 rounded-lg bg-primary/10 group-hover:bg-primary/20 transition-colors">
-            <BookOpen className="h-5 w-5 text-primary" />
-          </div>
-          <span className="text-xl font-bold bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent">
-            StudyLane
-          </span>
+          <img src={logo} alt="JESTUDYLANE" className="h-10 w-auto" />
         </Link>
 
         {/* Desktop Navigation */}
@@ -135,6 +132,12 @@ const Header: React.FC = () => {
                   <Link to="/dashboard" className="cursor-pointer">
                     <BarChart3 className="mr-2 h-4 w-4" />
                     Dashboard
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuItem asChild>
+                  <Link to="/exams" className="cursor-pointer">
+                    <GraduationCap className="mr-2 h-4 w-4" />
+                    Exams
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>

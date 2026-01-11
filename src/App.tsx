@@ -18,6 +18,7 @@ import Test from "./pages/Test";
 import Results from "./pages/Results";
 import StudentPerformance from "./pages/StudentPerformance";
 import Leaderboard from "./pages/Leaderboard";
+import Exams from "./pages/Exams";
 import Admin from "./pages/Admin";
 import NotFound from "./pages/NotFound";
 
@@ -63,6 +64,14 @@ const App = () => (
                       }
                     />
                     <Route
+                      path="/exams"
+                      element={
+                        <ProtectedRoute>
+                          <Exams />
+                        </ProtectedRoute>
+                      }
+                    />
+                    <Route
                       path="/student-performance"
                       element={
                         <ProtectedRoute>
@@ -104,4 +113,3 @@ const App = () => (
 );
 
 export default App;
-
