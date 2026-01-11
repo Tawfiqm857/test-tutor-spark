@@ -7,7 +7,7 @@ import { Progress } from '@/components/ui/progress';
 import { useAuth } from '@/contexts/AuthContext';
 import { useTest } from '@/contexts/TestContext';
 import { useQuizStats } from '@/hooks/useQuizStats';
-import { Play, Clock, Trophy, Target, BookOpen, Brain, ChevronRight, Sparkles, Loader2 } from 'lucide-react';
+import { Play, Clock, Trophy, Target, BookOpen, Brain, ChevronRight, Sparkles, Loader2, GraduationCap } from 'lucide-react';
 import ProfilePictureUpload from '@/components/ProfilePictureUpload';
 import PerformanceChart from '@/components/dashboard/PerformanceChart';
 import SubjectBreakdownChart from '@/components/dashboard/SubjectBreakdownChart';
@@ -32,11 +32,11 @@ const Dashboard: React.FC = () => {
   const getSubjectIcon = (subject: string) => {
     switch (subject) {
       case 'HTML':
-        return <BookOpen className="h-5 w-5 text-warning" />;
+        return <BookOpen className="h-5 w-5 text-accent" />;
       case 'CSS':
         return <Brain className="h-5 w-5 text-primary" />;
       case 'JavaScript':
-        return <Target className="h-5 w-5 text-warning" />;
+        return <Target className="h-5 w-5 text-accent" />;
       default:
         return <BookOpen className="h-5 w-5" />;
     }
@@ -68,15 +68,15 @@ const Dashboard: React.FC = () => {
       label: 'Tests Available', 
       value: tests.length.toString(), 
       icon: BookOpen, 
-      color: 'text-warning',
-      bg: 'bg-warning/10'
+      color: 'text-accent',
+      bg: 'bg-accent/10'
     },
     { 
       label: 'Total Attempts', 
       value: totalAttempts.toString(), 
       icon: Brain, 
-      color: 'text-accent',
-      bg: 'bg-accent/10'
+      color: 'text-primary',
+      bg: 'bg-primary/10'
     },
   ];
 
@@ -89,10 +89,10 @@ const Dashboard: React.FC = () => {
             <div>
               <div className="flex items-center gap-2 mb-2">
                 <h1 className="text-3xl font-bold">Welcome back, {user?.name?.split(' ')[0]}!</h1>
-                <Sparkles className="h-6 w-6 text-warning" />
+                <Sparkles className="h-6 w-6 text-accent" />
               </div>
               <p className="text-muted-foreground text-lg">
-                Ready to continue your web development journey? Let's see how you're progressing.
+                Ready to continue your learning journey? Let's see how you're progressing.
               </p>
             </div>
             <Card className="p-4 shadow-lg border-0 bg-card/80 backdrop-blur-sm">
@@ -107,6 +107,42 @@ const Dashboard: React.FC = () => {
               </div>
             </Card>
           </div>
+        </div>
+
+        {/* Quick Actions */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+          <Card className="shadow-lg border-0 bg-gradient-to-r from-primary/10 to-primary/5">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">Take an Exam</h3>
+                  <p className="text-sm text-muted-foreground">Test your knowledge and earn certifications</p>
+                </div>
+                <Button asChild>
+                  <Link to="/exams">
+                    <GraduationCap className="mr-2 h-4 w-4" />
+                    View Exams
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="shadow-lg border-0 bg-gradient-to-r from-accent/10 to-accent/5">
+            <CardContent className="p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="font-semibold text-lg mb-1">View Leaderboard</h3>
+                  <p className="text-sm text-muted-foreground">See how you rank against others</p>
+                </div>
+                <Button asChild variant="outline">
+                  <Link to="/leaderboard">
+                    <Trophy className="mr-2 h-4 w-4" />
+                    Rankings
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Stats Overview */}
@@ -145,7 +181,7 @@ const Dashboard: React.FC = () => {
                   <span>Your Learning Progress</span>
                 </CardTitle>
                 <CardDescription className="mt-1">
-                  Track your journey through web development fundamentals
+                  Track your journey through our comprehensive courses
                 </CardDescription>
               </div>
               <Button asChild variant="outline" size="sm">
@@ -173,13 +209,13 @@ const Dashboard: React.FC = () => {
         {/* Available Tests */}
         <div className="mb-8">
           <div className="flex items-center justify-between mb-6">
-            <h2 className="text-2xl font-bold">Available Tests</h2>
+            <h2 className="text-2xl font-bold">Practice Tests</h2>
             <Badge variant="secondary" className="text-xs">
               {tests.length} tests
             </Badge>
           </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-            {tests.map((test) => {
+            {tests.slice(0, 6).map((test) => {
               const progress = getTestProgress(test.id);
               return (
                 <Card key={test.id} className="group hover:shadow-xl transition-all duration-300 shadow-lg border-0 overflow-hidden">
@@ -239,6 +275,16 @@ const Dashboard: React.FC = () => {
               );
             })}
           </div>
+          {tests.length > 6 && (
+            <div className="text-center mt-6">
+              <Button asChild variant="outline">
+                <Link to="/exams">
+                  View All Tests
+                  <ChevronRight className="ml-1 h-4 w-4" />
+                </Link>
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Learning Tips */}

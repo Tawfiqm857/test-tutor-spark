@@ -3,7 +3,8 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { BookOpen, Code, Palette, Zap, Users, Trophy, ArrowRight, CheckCircle } from 'lucide-react';
+import { BookOpen, Code, Palette, Zap, Users, Trophy, ArrowRight, CheckCircle, GraduationCap, BarChart3, Target } from 'lucide-react';
+import logo from '@/assets/logo.png';
 
 const Home: React.FC = () => {
   const { isAuthenticated } = useAuth();
@@ -13,8 +14,8 @@ const Home: React.FC = () => {
       icon: <Code className="h-8 w-8" />,
       title: 'HTML Mastery',
       description: 'Test your knowledge of HTML elements, attributes, and semantic markup.',
-      color: 'text-warning',
-      bg: 'bg-warning/10',
+      color: 'text-accent',
+      bg: 'bg-accent/10',
     },
     {
       icon: <Palette className="h-8 w-8" />,
@@ -27,8 +28,29 @@ const Home: React.FC = () => {
       icon: <Zap className="h-8 w-8" />,
       title: 'JavaScript Logic',
       description: 'Challenge yourself with JavaScript fundamentals and modern ES6+ features.',
-      color: 'text-warning',
-      bg: 'bg-warning/10',
+      color: 'text-accent',
+      bg: 'bg-accent/10',
+    },
+    {
+      icon: <Target className="h-8 w-8" />,
+      title: 'UI/UX Design',
+      description: 'Learn user interface and experience design principles and best practices.',
+      color: 'text-primary',
+      bg: 'bg-primary/10',
+    },
+    {
+      icon: <BarChart3 className="h-8 w-8" />,
+      title: 'Data Analysis',
+      description: 'Master data analysis concepts and tools for making data-driven decisions.',
+      color: 'text-accent',
+      bg: 'bg-accent/10',
+    },
+    {
+      icon: <GraduationCap className="h-8 w-8" />,
+      title: 'Comprehensive Exams',
+      description: 'Take timed exams to certify your skills and track your learning progress.',
+      color: 'text-primary',
+      bg: 'bg-primary/10',
     },
   ];
 
@@ -43,6 +65,8 @@ const Home: React.FC = () => {
     'Instant feedback and explanations',
     'Track your progress over time',
     'Compare with other students',
+    'Take timed exams and certifications',
+    'Learn at your own pace',
   ];
 
   return (
@@ -52,28 +76,39 @@ const Home: React.FC = () => {
         <div className="absolute inset-0 bg-grid-pattern opacity-[0.02]" />
         <div className="container relative">
           <div className="max-w-3xl mx-auto text-center space-y-8">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 text-primary text-sm font-medium">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-accent/10 text-accent text-sm font-medium">
               <Zap className="h-4 w-4" />
               Start learning for free
             </div>
+            <div className="flex justify-center mb-6">
+              <img src={logo} alt="JESTUDYLANE" className="h-20 w-auto" />
+            </div>
             <h1 className="text-4xl md:text-5xl lg:text-6xl font-bold leading-tight tracking-tight">
               Master Web Development with
-              <span className="bg-gradient-to-r from-primary to-primary/60 bg-clip-text text-transparent block mt-2">
-                StudyLane
+              <span className="bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent block mt-2">
+                JESTUDYLANE
               </span>
             </h1>
             <p className="text-xl text-muted-foreground leading-relaxed max-w-2xl mx-auto">
-              Test your HTML, CSS, and JavaScript skills with our comprehensive assessment platform. 
-              Track your progress and become a better web developer.
+              Test your skills with our comprehensive assessment platform. 
+              Take practice tests, exams, and track your progress to become a better developer.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center pt-4">
               {isAuthenticated ? (
-                <Button asChild size="lg" className="text-lg px-8 h-12">
-                  <Link to="/dashboard">
-                    Go to Dashboard
-                    <ArrowRight className="ml-2 h-5 w-5" />
-                  </Link>
-                </Button>
+                <>
+                  <Button asChild size="lg" className="text-lg px-8 h-12">
+                    <Link to="/dashboard">
+                      Go to Dashboard
+                      <ArrowRight className="ml-2 h-5 w-5" />
+                    </Link>
+                  </Button>
+                  <Button asChild size="lg" variant="outline" className="text-lg px-8 h-12">
+                    <Link to="/exams">
+                      <GraduationCap className="mr-2 h-5 w-5" />
+                      Take Exam
+                    </Link>
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button asChild size="lg" className="text-lg px-8 h-12">
@@ -100,11 +135,11 @@ const Home: React.FC = () => {
               Everything You Need to Excel
             </h2>
             <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
-              Our platform covers all essential web development technologies with interactive tests and instant feedback.
+              Our platform covers all essential tech skills with interactive tests, exams, and instant feedback.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-8">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8">
             {features.map((feature, index) => (
               <Card key={index} className="text-center hover:shadow-xl transition-all duration-300 border-0 shadow-lg group">
                 <CardHeader className="pb-4">
@@ -151,26 +186,26 @@ const Home: React.FC = () => {
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div>
               <h2 className="text-3xl md:text-4xl font-bold mb-6">
-                Why Choose StudyLane?
+                Why Choose JESTUDYLANE?
               </h2>
               <p className="text-lg text-muted-foreground mb-8">
-                Join thousands of students who have improved their web development skills using our platform.
+                Join thousands of students who have improved their tech skills using our platform powered by Joe Express Tech Hub.
               </p>
-              <div className="space-y-4">
+              <div className="grid sm:grid-cols-2 gap-4">
                 {benefits.map((benefit, index) => (
                   <div key={index} className="flex items-center gap-3">
                     <div className="p-1 rounded-full bg-success/10">
                       <CheckCircle className="h-5 w-5 text-success" />
                     </div>
-                    <span className="text-lg">{benefit}</span>
+                    <span className="text-base">{benefit}</span>
                   </div>
                 ))}
               </div>
             </div>
             <Card className="p-8 shadow-xl border-0 bg-gradient-to-br from-primary/5 to-accent/5">
               <div className="text-center space-y-6">
-                <div className="p-4 rounded-2xl bg-primary/10 inline-block">
-                  <Trophy className="h-12 w-12 text-primary" />
+                <div className="p-4 rounded-2xl bg-accent/10 inline-block">
+                  <Trophy className="h-12 w-12 text-accent" />
                 </div>
                 <h3 className="text-2xl font-bold">Ready to Get Started?</h3>
                 <p className="text-muted-foreground">
@@ -198,7 +233,7 @@ const Home: React.FC = () => {
               Ready to Test Your Skills?
             </h2>
             <p className="text-xl text-primary-foreground/90">
-              Join thousands of students improving their web development skills every day.
+              Join thousands of students improving their tech skills every day with JESTUDYLANE.
             </p>
             {!isAuthenticated && (
               <Button asChild size="lg" variant="secondary" className="text-lg px-8 h-12">
