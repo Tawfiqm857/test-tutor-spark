@@ -1600,8 +1600,7 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
           user_id: user.id,
           subject_id: subjects.id,
           score,
-          total_questions: currentTest.questions.length,
-          time_taken: null // You can implement timing if needed
+          total_questions: currentTest.questions.length
         })
         .select()
         .single();
