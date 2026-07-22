@@ -1388,12 +1388,20 @@ const STORAGE_KEY = 'test_progress_autosave';
 
 export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, isAuthenticated } = useAuth();
-  const [tests] = useState<Test[]>(mockTests);
+  const [dbTests, setDbTests] = useState<Test[]>([]);
   const [testProgress, setTestProgress] = useState<Record<string, TestProgress>>({});
   const [currentTest, setCurrentTest] = useState<Test | null>(null);
   const [currentAnswers, setCurrentAnswers] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const [savedProgress, setSavedProgress] = useState<SavedTestProgress | null>(null);
+  const [subjectIdToTestId, setSubjectIdToTestId] = useState<Record<string, string>>({});
+
+  // Combined list: DB-authored tests + fallback mock tests for subjects that have no DB content yet.
+  const tests = React.useMemo(() => {
+    const dbSubjectNames = new Set(dbTests.map(t => t.subject));
+    const fallback = mockTests.filter(m => !dbSubjectNames.has(m.subject));
+    return [...dbTests, ...fallback];
+  }, [dbTests]);
 
   // Load saved progress from localStorage on mount
   const loadSavedProgress = useCallback((testId: string): SavedTestProgress | null => {
@@ -1401,7 +1409,6 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const saved = localStorage.getItem(`${STORAGE_KEY}_${testId}`);
       if (saved) {
         const parsed = JSON.parse(saved) as SavedTestProgress;
-        // Check if saved less than 2 hours ago
         if (Date.now() - parsed.savedAt < 2 * 60 * 60 * 1000) {
           return parsed;
         } else {
@@ -1416,7 +1423,6 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const saveProgressToStorage = useCallback((timeRemaining: number, currentQuestionIndex: number) => {
     if (!currentTest) return;
-    
     const progress: SavedTestProgress = {
       testId: currentTest.id,
       currentAnswers,
@@ -1424,7 +1430,6 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
       currentQuestionIndex,
       savedAt: Date.now()
     };
-    
     try {
       localStorage.setItem(`${STORAGE_KEY}_${currentTest.id}`, JSON.stringify(progress));
       setSavedProgress(progress);
@@ -1440,14 +1445,90 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setSavedProgress(null);
   }, [currentTest]);
 
+  // Load DB-authored tests (subject practice tests + admin-created exams)
+  useEffect(() => {
+    loadDbTests();
+  }, []);
+
+  const loadDbTests = async () => {
+    try {
+      const [subjectsRes, questionsRes, examsRes, examQuestionsRes] = await Promise.all([
+        supabase.from('subjects').select('*'),
+        supabase.from('questions').select('*').eq('is_active', true),
+        supabase.from('exams').select('*').eq('is_active', true),
+        supabase.from('exam_questions').select('*, questions(*)'),
+      ]);
+
+      const subjects = subjectsRes.data || [];
+      const questions = questionsRes.data || [];
+      const exams = examsRes.data || [];
+      const examQuestions = examQuestionsRes.data || [];
+
+      const subjectMap: Record<string, string> = {};
+      subjects.forEach((s: any) => { subjectMap[s.id] = s.name; });
+
+      const built: Test[] = [];
+      const idMap: Record<string, string> = {};
+
+      // Practice tests grouped by subject (only if that subject has questions)
+      subjects.forEach((s: any) => {
+        const qs = questions.filter((q: any) => q.subject_id === s.id);
+        if (qs.length === 0) return;
+        const testId = `subject-${s.id}`;
+        idMap[s.id] = testId;
+        built.push({
+          id: testId,
+          title: `${s.name} Practice`,
+          subject: s.name as Test['subject'],
+          description: s.description || `Practice questions for ${s.name}.`,
+          timeLimit: Math.max(5, qs.length),
+          questions: qs.map((q: any) => ({
+            id: q.id,
+            question: q.question_text,
+            options: Array.isArray(q.options) ? q.options : [],
+            correctAnswer: q.correct_answer,
+            explanation: q.explanation || undefined,
+          })),
+        });
+      });
+
+      // Admin-created formal exams
+      exams.forEach((e: any) => {
+        const eqs = examQuestions
+          .filter((eq: any) => eq.exam_id === e.id && eq.questions)
+          .sort((a: any, b: any) => (a.question_order || 0) - (b.question_order || 0));
+        if (eqs.length === 0) return;
+        const subjectName = subjectMap[e.subject_id] || 'HTML';
+        built.push({
+          id: `exam-${e.id}`,
+          title: e.title,
+          subject: subjectName as Test['subject'],
+          description: e.description || 'Formal exam',
+          timeLimit: e.duration_minutes || 30,
+          questions: eqs.map((eq: any) => ({
+            id: eq.questions.id,
+            question: eq.questions.question_text,
+            options: Array.isArray(eq.questions.options) ? eq.questions.options : [],
+            correctAnswer: eq.questions.correct_answer,
+            explanation: eq.questions.explanation || undefined,
+          })),
+        });
+      });
+
+      setDbTests(built);
+      setSubjectIdToTestId(idMap);
+    } catch (error) {
+      console.error('Error loading DB tests:', error);
+    }
+  };
+
   // Load user's quiz progress from Supabase
   useEffect(() => {
     if (isAuthenticated && user) {
       loadUserProgress();
     } else {
-      // Initialize empty progress if not authenticated
       const initialProgress: Record<string, TestProgress> = {};
-      mockTests.forEach(test => {
+      tests.forEach(test => {
         initialProgress[test.id] = {
           testId: test.id,
           attempts: 0,
@@ -1457,11 +1538,10 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
       setTestProgress(initialProgress);
     }
-  }, [isAuthenticated, user]);
+  }, [isAuthenticated, user, tests.length]);
 
   const loadUserProgress = async () => {
     if (!user) return;
-
     try {
       setLoading(true);
       const { data: sessions, error } = await supabase
@@ -1475,11 +1555,8 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
 
-      // Process sessions to create progress
       const progress: Record<string, TestProgress> = {};
-      
-      // Initialize all tests
-      mockTests.forEach(test => {
+      tests.forEach(test => {
         progress[test.id] = {
           testId: test.id,
           attempts: 0,
@@ -1488,17 +1565,18 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
         };
       });
 
-      // Update with actual session data
       if (sessions) {
         sessions.forEach(session => {
-          const testId = session.subject_id;
-          const testName = getTestIdFromSubject(session.subject_id);
-          
-          if (progress[testName]) {
-            progress[testName].attempts++;
-            progress[testName].bestScore = Math.max(progress[testName].bestScore, session.score);
-            progress[testName].lastAttemptDate = new Date(session.completed_at);
-            progress[testName].status = 'completed';
+          // Try direct DB-test id mapping (subject-<uuid>) first, then fall back to name-based mock id
+          const dbTestId = subjectIdToTestId[session.subject_id];
+          const fallbackId = getTestIdFromSubject(session.subject_id);
+          const testId = dbTestId && progress[dbTestId] ? dbTestId : fallbackId;
+
+          if (progress[testId]) {
+            progress[testId].attempts++;
+            progress[testId].bestScore = Math.max(progress[testId].bestScore, session.score);
+            progress[testId].lastAttemptDate = new Date(session.completed_at);
+            progress[testId].status = 'completed';
           }
         });
       }
@@ -1511,7 +1589,7 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // Helper function to map subject names to test IDs
+  // Legacy mapping for pre-existing mock-based sessions
   const getTestIdFromSubject = (subjectName: string): string => {
     const mapping: Record<string, string> = {
       'HTML': 'html-basics',
@@ -1530,6 +1608,7 @@ export const TestProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const test = tests.find(t => t.id === testId);
     return test?.subject || 'HTML';
   };
+
 
   const startTest = useCallback((testId: string) => {
     const test = tests.find(t => t.id === testId);
