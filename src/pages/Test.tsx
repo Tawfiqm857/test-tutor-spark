@@ -54,7 +54,7 @@ const Test: React.FC = () => {
   const [isTestCompleted, setIsTestCompleted] = useState(false);
   
   const hasStartedRef = useRef<string | null>(null);
-  const autoSaveIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const autoSaveIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Initialize test - check for saved progress
   useEffect(() => {
